@@ -1,5 +1,5 @@
 package com.accenture.prueba_tecnica;
-
+/* 
 import org.springframework.boot.SpringApplication;
 
 public class TestPruebaTecnicaApplication {
@@ -8,4 +8,4 @@ public class TestPruebaTecnicaApplication {
 		SpringApplication.from(PruebaTecnicaApplication::main).with(TestcontainersConfiguration.class).run(args);
 	}
 
-}
+}*/

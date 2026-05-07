@@ -7,7 +7,7 @@ spring:
     name: franchise-api
 
   profiles:
-    active: local   # Perfil activo por defecto (sobreescribible por env var)
+    active: local
 
   # ── R2DBC (reactive DB) ──────────────────────────────────
   r2dbc:
@@ -19,24 +19,30 @@ spring:
       max-size: 10
       max-idle-time: 30m
 
-  # ── Flyway (migraciones SQL) ─────────────────────────────
-  # Nota: Flyway no es reactivo; usa la URL JDBC equivalente
+  # ── DataSource JDBC (exclusivo para Flyway — no se usa en runtime reactivo) ──
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:franchise_db}?useSSL=false&allowPublicKeyRetrieval=true
+    username: ${DB_USER:franchise_user}
+    password: ${DB_PASSWORD:franchise_pass}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  # ── Flyway ───────────────────────────────────────────────
   flyway:
     enabled: true
-    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:franchise_db}
-    user: ${DB_USER:franchise_user}
-    password: ${DB_PASSWORD:franchise_pass}
     locations: classpath:db/migration
     baseline-on-migrate: true
 
-# ── Servidor ────────────────────────────────────────────────
+  # ── Mensajes de error (Spring Boot 4) ────────────────────
+  web:
+    error:
+      include-message: always
+      include-binding-errors: always
+
+# ── Servidor ─────────────────────────────────────────────
 server:
   port: ${SERVER_PORT:8080}
-  error:
-    include-message: always
-    include-binding-errors: always
 
-# ── Actuator ────────────────────────────────────────────────
+# ── Actuator ─────────────────────────────────────────────
 management:
   endpoints:
     web:
@@ -46,10 +52,10 @@ management:
     health:
       show-details: always
 
-# ── Logging ─────────────────────────────────────────────────
+# ── Logging ──────────────────────────────────────────────
 logging:
   level:
     root: INFO
-    com.accenture.franchise: DEBUG
-    io.r2dbc: DEBUG
-    org.springframework.r2dbc: DEBUG
+    "[com.accenture.franchise]": DEBUG
+    "[io.r2dbc]": DEBUG
+    "[org.springframework.r2dbc]": DEBUG
