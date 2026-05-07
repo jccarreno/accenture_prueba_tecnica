@@ -1,3 +1,55 @@
+# ============================================================
+#  Franchise API — Configuración principal
+# ============================================================
+
 spring:
   application:
-    name: prueba_tecnica
+    name: franchise-api
+
+  profiles:
+    active: local   # Perfil activo por defecto (sobreescribible por env var)
+
+  # ── R2DBC (reactive DB) ──────────────────────────────────
+  r2dbc:
+    url: r2dbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:franchise_db}
+    username: ${DB_USER:franchise_user}
+    password: ${DB_PASSWORD:franchise_pass}
+    pool:
+      initial-size: 2
+      max-size: 10
+      max-idle-time: 30m
+
+  # ── Flyway (migraciones SQL) ─────────────────────────────
+  # Nota: Flyway no es reactivo; usa la URL JDBC equivalente
+  flyway:
+    enabled: true
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:franchise_db}
+    user: ${DB_USER:franchise_user}
+    password: ${DB_PASSWORD:franchise_pass}
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+# ── Servidor ────────────────────────────────────────────────
+server:
+  port: ${SERVER_PORT:8080}
+  error:
+    include-message: always
+    include-binding-errors: always
+
+# ── Actuator ────────────────────────────────────────────────
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics
+  endpoint:
+    health:
+      show-details: always
+
+# ── Logging ─────────────────────────────────────────────────
+logging:
+  level:
+    root: INFO
+    com.accenture.franchise: DEBUG
+    io.r2dbc: DEBUG
+    org.springframework.r2dbc: DEBUG
