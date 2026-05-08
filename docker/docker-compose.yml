@@ -1,32 +1,6 @@
-# =============================================================
-#  docker-compose.yml — franchise-api
-#
-#  Stack completo que simula un entorno cloud AWS en local:
-#
-#    mysql   → simula Amazon RDS (MySQL 8.0)
-#    redis   → simula Amazon ElastiCache (Redis 7)
-#    api     → la aplicación Spring Boot
-#
-#  Arquitectura de red:
-#    Los tres servicios comparten una red bridge interna.
-#    Solo el puerto 8080 (API) y 3306 (MySQL) se exponen al host
-#    para desarrollo. Redis NO se expone: solo la API lo consume.
-#
-#  Uso:
-#    docker compose up --build        # construye y levanta todo
-#    docker compose up -d             # en background
-#    docker compose down              # para los contenedores
-#    docker compose down -v           # para y elimina volúmenes
-#    docker compose logs -f api       # ver logs de la app
-#    docker compose ps                # estado de los servicios
-# =============================================================
-
 services:
 
   # ── Base de datos MySQL ──────────────────────────────────────
-  # Simula Amazon RDS MySQL 8.0.
-  # En producción real se reemplazaría por un endpoint de RDS y
-  # este servicio simplemente no existiría en el compose.
   mysql:
     image: mysql:8.0
     container_name: franchise-mysql
@@ -35,19 +9,13 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-admin}
       MYSQL_DATABASE: ${DB_NAME:-franchise_db}
-      # UTF-8 completo: soporta emojis y caracteres especiales
       MYSQL_CHARACTER_SET_SERVER: utf8mb4
       MYSQL_COLLATION_SERVER: utf8mb4_unicode_ci
 
     ports:
-      # Expuesto al host solo para herramientas de administración local
-      # (DBeaver, IntelliJ Database Tool, etc.)
-      # En producción RDS no expone el puerto directamente.
       - "${DB_PORT_HOST:-3306}:3306"
 
     volumes:
-      # Volumen con nombre: persiste datos entre reinicios.
-      # Equivale al almacenamiento persistente de RDS (EBS multi-AZ).
       - mysql_data:/var/lib/mysql
 
     # Configuración de MySQL para mejor rendimiento y compatibilidad
@@ -59,7 +27,6 @@ services:
       --max-connections=100
 
     # Healthcheck: espera a que MySQL esté listo antes de arrancar la API.
-    # Simula el comportamiento de RDS que tarda en estar disponible.
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost",
              "-u", "root", "-p${DB_PASSWORD:-admin}"]
@@ -72,22 +39,11 @@ services:
       - franchise-network
 
   # ── Redis (cache / sesiones) ─────────────────────────────────
-  # Simula Amazon ElastiCache for Redis.
-  # Actualmente preparado para cacheo futuro de consultas frecuentes
-  # (ej.: top-stock por franquicia) o gestión de rate-limiting.
-  #
-  # En producción se reemplazaría por el endpoint de ElastiCache y
-  # este servicio no existiría.
   redis:
     image: redis:7-alpine
     container_name: franchise-redis
     restart: unless-stopped
 
-    # Configuración de Redis:
-    #   --save 60 1        → persiste a disco si hubo ≥1 cambio en 60s
-    #   --loglevel warning → reduce ruido en los logs
-    #   --maxmemory        → límite de memoria (simula ElastiCache t3.micro: ~500MB)
-    #   --maxmemory-policy → LRU: descarta keys menos usadas cuando llega al límite
     command: >
       redis-server
       --save 60 1
@@ -95,15 +51,7 @@ services:
       --maxmemory 128mb
       --maxmemory-policy allkeys-lru
 
-    # Redis NO expone su puerto al host por seguridad.
-    # Solo la API (en la misma red Docker) puede conectarse.
-    # En producción ElastiCache tampoco es accesible públicamente.
-    # Para debugging local, descomenta la siguiente línea:
-    # ports:
-    #   - "6379:6379"
-
     volumes:
-      # Persistencia de Redis (equivale al backup de ElastiCache)
       - redis_data:/data
 
     healthcheck:
@@ -166,7 +114,6 @@ services:
 
 # ── Volúmenes ─────────────────────────────────────────────────
 # Persistencia de datos entre reinicios de contenedores.
-# Equivalen al almacenamiento persistente en cloud (EBS, S3, etc.)
 volumes:
   mysql_data:
     driver: local
@@ -179,9 +126,6 @@ volumes:
       description: "Redis data — simula Amazon ElastiCache backup"
 
 # ── Redes ──────────────────────────────────────────────────────
-# Red bridge interna: los servicios se comunican por nombre.
-# Simula una VPC privada de AWS donde los servicios no son
-# accesibles desde internet, solo entre sí.
 networks:
   franchise-network:
     driver: bridge
