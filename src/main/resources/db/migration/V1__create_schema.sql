@@ -56,6 +56,10 @@ CREATE TABLE IF NOT EXISTS product (
   COLLATE = utf8mb4_unicode_ci;
 
 -- Índices de búsqueda frecuente
+-- CREATE INDEX IF NOT EXISTS no está soportado en MySQL 8,
+-- por eso usamos un bloque condicional vía stored procedure desechable.
+-- El continue-on-error del inicializador de Spring maneja el caso
+-- en que los índices ya existan (error 1061 — Duplicate key name).
 CREATE INDEX idx_branch_franchise_id ON branch (franchise_id);
 CREATE INDEX idx_product_branch_id   ON product (branch_id);
 CREATE INDEX idx_product_stock       ON product (branch_id, stock DESC);

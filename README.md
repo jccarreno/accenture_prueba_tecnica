@@ -109,7 +109,7 @@ Elige **una** de las siguientes opciones según cómo quieras desplegar:
 
 Esta opción levanta tres contenedores automáticamente:
 
-- `franchise-mysql` → MySQL 8.0 
+- `franchise-mysql` → MySQL 8.0
 - `franchise-redis` → Redis 7
 - `franchise-api` → la aplicación Spring Boot
 
@@ -164,7 +164,6 @@ curl http://localhost:8080/api/v1/franchises
 # Ver el producto con mayor stock por sucursal de la franquicia 1
 curl http://localhost:8080/api/v1/franchises/1/top-stock
 ```
-
 
 ---
 
@@ -266,10 +265,6 @@ El perfil `local` (activo por defecto) apunta a `localhost:3306` con usuario `ro
 spring:
   r2dbc:
     url: r2dbc:mysql://localhost:3306/franchise_db
-    username: TU_USUARIO
-    password: TU_CONTRASEÑA
-  datasource:
-    url: jdbc:mysql://localhost:3306/franchise_db?useSSL=false&allowPublicKeyRetrieval=true
     username: TU_USUARIO
     password: TU_CONTRASEÑA
 ```
