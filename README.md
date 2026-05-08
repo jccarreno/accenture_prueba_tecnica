@@ -165,24 +165,6 @@ curl http://localhost:8080/api/v1/franchises
 curl http://localhost:8080/api/v1/franchises/1/top-stock
 ```
 
-### Comandos útiles de Docker Compose
-
-```bash
-# Levantar en background (sin ver logs)
-docker compose up -d --build
-
-# Ver logs en tiempo real
-docker compose logs -f api
-
-# Ver estado de los contenedores
-docker compose ps
-
-# Parar sin eliminar datos
-docker compose down
-
-# Parar y eliminar volúmenes (borra todos los datos de BD)
-docker compose down -v
-```
 
 ---
 

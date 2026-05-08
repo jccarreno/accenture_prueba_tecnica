@@ -19,18 +19,12 @@ spring:
       max-size: 10
       max-idle-time: 30m
 
-  # ── DataSource JDBC (exclusivo para Flyway — no se usa en runtime reactivo) ──
-  datasource:
-    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:franchise_db}?useSSL=false&allowPublicKeyRetrieval=true
-    username: ${DB_USER:root}
-    password: ${DB_PASSWORD:admin }
-    driver-class-name: com.mysql.cj.jdbc.Driver
-
-  # ── Flyway ───────────────────────────────────────────────
-  flyway:
-    enabled: true
-    locations: classpath:db/migration
-    baseline-on-migrate: true
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/migration/V1__create_schema.sql
+      data-locations: classpath:db/migration/V2__seed_data.sql
+      platform: mysql
 
   # ── Mensajes de error (Spring Boot 4) ────────────────────
   web:
