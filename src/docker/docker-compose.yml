@@ -1,0 +1,189 @@
+# =============================================================
+#  docker-compose.yml — franchise-api
+#
+#  Stack completo que simula un entorno cloud AWS en local:
+#
+#    mysql   → simula Amazon RDS (MySQL 8.0)
+#    redis   → simula Amazon ElastiCache (Redis 7)
+#    api     → la aplicación Spring Boot
+#
+#  Arquitectura de red:
+#    Los tres servicios comparten una red bridge interna.
+#    Solo el puerto 8080 (API) y 3306 (MySQL) se exponen al host
+#    para desarrollo. Redis NO se expone: solo la API lo consume.
+#
+#  Uso:
+#    docker compose up --build        # construye y levanta todo
+#    docker compose up -d             # en background
+#    docker compose down              # para los contenedores
+#    docker compose down -v           # para y elimina volúmenes
+#    docker compose logs -f api       # ver logs de la app
+#    docker compose ps                # estado de los servicios
+# =============================================================
+
+services:
+
+  # ── Base de datos MySQL ──────────────────────────────────────
+  # Simula Amazon RDS MySQL 8.0.
+  # En producción real se reemplazaría por un endpoint de RDS y
+  # este servicio simplemente no existiría en el compose.
+  mysql:
+    image: mysql:8.0
+    container_name: franchise-mysql
+    restart: unless-stopped
+
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-admin}
+      MYSQL_DATABASE: ${DB_NAME:-franchise_db}
+      # UTF-8 completo: soporta emojis y caracteres especiales
+      MYSQL_CHARACTER_SET_SERVER: utf8mb4
+      MYSQL_COLLATION_SERVER: utf8mb4_unicode_ci
+
+    ports:
+      # Expuesto al host solo para herramientas de administración local
+      # (DBeaver, IntelliJ Database Tool, etc.)
+      # En producción RDS no expone el puerto directamente.
+      - "${DB_PORT_HOST:-3306}:3306"
+
+    volumes:
+      # Volumen con nombre: persiste datos entre reinicios.
+      # Equivale al almacenamiento persistente de RDS (EBS multi-AZ).
+      - mysql_data:/var/lib/mysql
+
+    # Configuración de MySQL para mejor rendimiento y compatibilidad
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --default-authentication-plugin=mysql_native_password
+      --innodb-buffer-pool-size=128M
+      --max-connections=100
+
+    # Healthcheck: espera a que MySQL esté listo antes de arrancar la API.
+    # Simula el comportamiento de RDS que tarda en estar disponible.
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost",
+             "-u", "root", "-p${DB_PASSWORD:-admin}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+    networks:
+      - franchise-network
+
+  # ── Redis (cache / sesiones) ─────────────────────────────────
+  # Simula Amazon ElastiCache for Redis.
+  # Actualmente preparado para cacheo futuro de consultas frecuentes
+  # (ej.: top-stock por franquicia) o gestión de rate-limiting.
+  #
+  # En producción se reemplazaría por el endpoint de ElastiCache y
+  # este servicio no existiría.
+  redis:
+    image: redis:7-alpine
+    container_name: franchise-redis
+    restart: unless-stopped
+
+    # Configuración de Redis:
+    #   --save 60 1        → persiste a disco si hubo ≥1 cambio en 60s
+    #   --loglevel warning → reduce ruido en los logs
+    #   --maxmemory        → límite de memoria (simula ElastiCache t3.micro: ~500MB)
+    #   --maxmemory-policy → LRU: descarta keys menos usadas cuando llega al límite
+    command: >
+      redis-server
+      --save 60 1
+      --loglevel warning
+      --maxmemory 128mb
+      --maxmemory-policy allkeys-lru
+
+    # Redis NO expone su puerto al host por seguridad.
+    # Solo la API (en la misma red Docker) puede conectarse.
+    # En producción ElastiCache tampoco es accesible públicamente.
+    # Para debugging local, descomenta la siguiente línea:
+    # ports:
+    #   - "6379:6379"
+
+    volumes:
+      # Persistencia de Redis (equivale al backup de ElastiCache)
+      - redis_data:/data
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+    networks:
+      - franchise-network
+
+  # ── Aplicación Spring Boot ───────────────────────────────────
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: franchise-api:latest
+    container_name: franchise-api
+    restart: unless-stopped
+
+    # La API solo arranca cuando MySQL Y Redis están healthy
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    environment:
+      # Perfil Docker: sobreescribe URLs de conexión para apuntar a los contenedores
+      SPRING_PROFILES_ACTIVE: docker
+
+      # Conexión MySQL — 'mysql' se resuelve por DNS interno de Docker
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-franchise_db}
+      DB_USER: ${DB_USER:-root}
+      DB_PASSWORD: ${DB_PASSWORD:-admin}
+
+      # Conexión Redis — 'redis' se resuelve por DNS interno de Docker
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+
+      SERVER_PORT: 8080
+      JAVA_OPTS: "-Xms256m -Xmx512m -XX:+UseContainerSupport"
+
+    ports:
+      - "${API_PORT:-8080}:8080"
+
+    networks:
+      - franchise-network
+
+    healthcheck:
+      test: ["CMD-SHELL",
+             "wget -qO- http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+
+# ── Volúmenes ─────────────────────────────────────────────────
+# Persistencia de datos entre reinicios de contenedores.
+# Equivalen al almacenamiento persistente en cloud (EBS, S3, etc.)
+volumes:
+  mysql_data:
+    driver: local
+    labels:
+      description: "MySQL data — simula Amazon RDS EBS storage"
+
+  redis_data:
+    driver: local
+    labels:
+      description: "Redis data — simula Amazon ElastiCache backup"
+
+# ── Redes ──────────────────────────────────────────────────────
+# Red bridge interna: los servicios se comunican por nombre.
+# Simula una VPC privada de AWS donde los servicios no son
+# accesibles desde internet, solo entre sí.
+networks:
+  franchise-network:
+    driver: bridge
+    labels:
+      description: "Red interna — simula AWS VPC private subnet"

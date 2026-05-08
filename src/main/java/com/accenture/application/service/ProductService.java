@@ -17,6 +17,13 @@ import reactor.core.publisher.Mono;
  * <p>Orquesta validaciones de negocio: verifica que la sucursal padre
  * exista, que no haya nombres duplicados y que el producto exista
  * antes de modificarlo o eliminarlo.</p>
+ *
+ * <h3>Nota sobre operadores reactivos</h3>
+ * <p>Se usa {@code flatMapMany} en lugar de {@code thenMany} para encadenar
+ * el {@code Flux} de productos. {@code thenMany} descarta el elemento upstream
+ * y, por tanto, también ignora cualquier error emitido por {@code switchIfEmpty},
+ * haciendo que el {@code ResourceNotFoundException} nunca llegue al suscriptor.
+ * {@code flatMapMany} propaga tanto el valor como el error correctamente.</p>
  */
 @Service
 public class ProductService implements ProductUseCase {
@@ -100,12 +107,18 @@ public class ProductService implements ProductUseCase {
                                 }));
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Usa {@code flatMapMany} en lugar de {@code thenMany} para garantizar
+     * que el error de {@code switchIfEmpty} se propague al suscriptor cuando
+     * la sucursal no existe.</p>
+     */
     @Override
     public Flux<Product> getProductsByBranch(Long branchId) {
         return branchRepository.findById(branchId)
                 .switchIfEmpty(Mono.error(new ResourceNotFoundException(
                         ApiConstants.RESOURCE_BRANCH, branchId)))
-                .thenMany(productRepository.findByBranchId(branchId));
+                .flatMapMany(branch -> productRepository.findByBranchId(branchId));
     }
 }

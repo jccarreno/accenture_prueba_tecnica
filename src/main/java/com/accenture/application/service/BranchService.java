@@ -16,6 +16,13 @@ import reactor.core.publisher.Mono;
  *
  * <p>Orquesta validaciones de negocio: verifica que la franquicia padre
  * exista y que no haya duplicidad de nombres dentro de la misma franquicia.</p>
+ *
+ * <h3>Nota sobre operadores reactivos</h3>
+ * <p>Se usa {@code flatMapMany} en lugar de {@code thenMany} para encadenar
+ * el {@code Flux} de sucursales. {@code thenMany} descarta el elemento upstream
+ * y, por tanto, también ignora cualquier error emitido por {@code switchIfEmpty},
+ * haciendo que el {@code ResourceNotFoundException} nunca llegue al suscriptor.
+ * {@code flatMapMany} propaga tanto el valor como el error correctamente.</p>
  */
 @Service
 public class BranchService implements BranchUseCase {
@@ -72,12 +79,18 @@ public class BranchService implements BranchUseCase {
                                 }));
     }
 
-    /** {@inheritDoc} */
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Usa {@code flatMapMany} en lugar de {@code thenMany} para garantizar
+     * que el error de {@code switchIfEmpty} se propague al suscriptor cuando
+     * la franquicia no existe.</p>
+     */
     @Override
     public Flux<Branch> getBranchesByFranchise(Long franchiseId) {
         return franchiseRepository.findById(franchiseId)
                 .switchIfEmpty(Mono.error(new ResourceNotFoundException(
                         ApiConstants.RESOURCE_FRANCHISE, franchiseId)))
-                .thenMany(branchRepository.findByFranchiseId(franchiseId));
+                .flatMapMany(franchise -> branchRepository.findByFranchiseId(franchiseId));
     }
 }

@@ -1,0 +1,49 @@
+# =============================================================
+#  Perfil DOCKER — Configuración para entorno contenerizado.
+#
+#  Se activa con: SPRING_PROFILES_ACTIVE=docker
+#  Sobreescribe las URLs de conexión del application.yaml para
+#  apuntar a los servicios Docker (mysql, redis) en lugar de
+#  localhost.
+# =============================================================
+
+spring:
+
+  # ── R2DBC (runtime reactivo) ──────────────────────────────
+  r2dbc:
+    url: r2dbc:mysql://${DB_HOST:mysql}:${DB_PORT:3306}/${DB_NAME:franchise_db}?allowPublicKeyRetrieval=true
+    username: ${DB_USER:root}
+    password: ${DB_PASSWORD:admin}
+    pool:
+      initial-size: 3
+      max-size: 15
+      max-idle-time: 30m
+
+  # ── DataSource JDBC (exclusivo para Flyway al arranque) ────
+  datasource:
+    url: jdbc:mysql://${DB_HOST:mysql}:${DB_PORT:3306}/${DB_NAME:franchise_db}?useSSL=false&allowPublicKeyRetrieval=true
+    username: ${DB_USER:root}
+    password: ${DB_PASSWORD:admin}
+
+  # ── Redis (simula Amazon ElastiCache) ─────────────────────
+  # La dependencia de Spring Data Redis se puede agregar en el
+  # futuro para cachear consultas como getTopStockByFranchise.
+  # Por ahora se configura la conexión para tenerla lista.
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+      timeout: 2000ms
+      connect-timeout: 2000ms
+      # Sin contraseña en el entorno local (Redis por defecto no tiene auth)
+      # En producción ElastiCache usa auth-token:
+      # password: ${REDIS_PASSWORD:}
+
+# ── Logging reducido en Docker ─────────────────────────────
+logging:
+  level:
+    root: INFO
+    "[com.accenture]": INFO
+    "[io.r2dbc]": WARN
+    "[org.springframework.r2dbc]": WARN
+    "[org.flywaydb]": INFO

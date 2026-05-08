@@ -17,6 +17,13 @@ import reactor.core.publisher.Mono;
  * <p>Esta clase pertenece a la capa de aplicación: orquesta la lógica
  * de negocio usando los puertos de dominio, sin conocer detalles
  * de infraestructura (HTTP, R2DBC, etc.).</p>
+ *
+ * <h3>Nota sobre operadores reactivos</h3>
+ * <p>Se usa {@code flatMapMany} en lugar de {@code thenMany} para encadenar
+ * el {@code Flux} de resultados. {@code thenMany} descarta el elemento upstream
+ * y, por tanto, también ignora cualquier error emitido por {@code switchIfEmpty},
+ * haciendo que el {@code ResourceNotFoundException} nunca llegue al suscriptor.
+ * {@code flatMapMany} propaga tanto el valor como el error correctamente.</p>
  */
 @Service
 public class FranchiseService implements FranchiseUseCase {
@@ -85,13 +92,16 @@ public class FranchiseService implements FranchiseUseCase {
     /**
      * {@inheritDoc}
      *
-     * <p>Verifica que la franquicia exista antes de consultar el top stock.</p>
+     * <p>Verifica que la franquicia exista antes de consultar el top stock.
+     * Usa {@code flatMapMany} en lugar de {@code thenMany} para que el error
+     * de {@code switchIfEmpty} se propague correctamente al suscriptor.</p>
      */
     @Override
     public Flux<TopStockProduct> getTopStockProductsByFranchise(Long franchiseId) {
         return franchiseRepository.findById(franchiseId)
                 .switchIfEmpty(Mono.error(new ResourceNotFoundException(
                         ApiConstants.RESOURCE_FRANCHISE, franchiseId)))
-                .thenMany(franchiseRepository.findTopStockProductsByFranchiseId(franchiseId));
+                .flatMapMany(franchise ->
+                        franchiseRepository.findTopStockProductsByFranchiseId(franchiseId));
     }
 }
