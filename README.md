@@ -155,7 +155,7 @@ Respuesta esperada:
 
 ### 4. Usar la API
 
-La API ya tiene datos de ejemplo cargados por Flyway. Puedes probarla de inmediato:
+La API ya tiene datos de ejemplo cargados por Spring. Puedes probarla de inmediato:
 
 ```bash
 # Listar franquicias
