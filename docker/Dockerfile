@@ -28,7 +28,7 @@ RUN mvn dependency:go-offline --no-transfer-progress
 #    -DskipTests : los tests corren en CI/CD, no en el build de imagen.
 #    --no-transfer-progress : output más limpio en logs de CI.
 COPY src ./src
-RUN mvn package -DskipTests --no-transfer-progress
+RUN mvn package --no-transfer-progress
 
 # ── Etapa 2: Runtime ─────────────────────────────────────────
 # JRE 21 Alpine (~85 MB) — sin JDK completo, mínima superficie

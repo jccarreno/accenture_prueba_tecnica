@@ -530,26 +530,6 @@ mvn test
 
 Cubre `FranchiseService`, `BranchService` y `ProductService` — 32 casos de prueba en total verificando reglas de negocio, excepciones de dominio y propagación correcta de errores reactivos.
 
-### Tests de integración (requieren Docker)
-
-Prueban los adaptadores de persistencia y los endpoints HTTP completos contra MySQL real levantado con Testcontainers.
-
-```bash
-# Asegúrate de que Docker esté corriendo
-mvn verify
-```
-
-Incluye:
-
-- `FranchiseRepositoryAdapterIT` — operaciones de persistencia contra MySQL real
-- `FranchiseApiIT` — suite end-to-end de todos los endpoints HTTP
-
-### Omitir tests de integración
-
-```bash
-mvn verify -DskipITs
-```
-
 ---
 
 ## Estructura del proyecto
@@ -610,7 +590,7 @@ Todas tienen valores por defecto para desarrollo local. Solo es necesario defini
 
 ## Datos de ejemplo
 
-Flyway carga automáticamente datos de ejemplo al arrancar. El estado inicial es:
+Spring carga automáticamente datos de ejemplo al arrancar. El estado inicial es:
 
 | Franquicia                   | Sucursales                                           |
 | ---------------------------- | ---------------------------------------------------- |
