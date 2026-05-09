@@ -24,6 +24,7 @@ spring:
       mode: always
       schema-locations: classpath:db/migration/V1__create_schema.sql
       data-locations: classpath:db/migration/V2__seed_data.sql
+      continue-on-error: true
 
   data:
     redis:
