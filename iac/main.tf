@@ -1,6 +1,11 @@
 # =============================================================
 #  main.tf — Infraestructura local con Terraform + Docker Provider
 #
+#  Uso:
+#    terraform init
+#    terraform apply
+#    terraform destroy
+# =============================================================
 
 terraform {
   required_version = ">= 1.6"
@@ -8,6 +13,12 @@ terraform {
   required_providers {
     docker = {
       source  = "kreuzwerker/docker"
+      version = "~> 3.0"
+    }
+    # null provider: permite ejecutar comandos locales (docker build)
+    # como workaround al bug del provider Docker en Windows.
+    null = {
+      source  = "hashicorp/null"
       version = "~> 3.0"
     }
   }
@@ -92,7 +103,7 @@ resource "docker_volume" "redis_data" {
 # Imagen de MySQL 8.0 — descargada desde Docker Hub
 resource "docker_image" "mysql" {
   name         = "mysql:8.0"
-  keep_locally = true  
+  keep_locally = true
 }
 
 # Imagen de Redis 7 Alpine — descargada desde Docker Hub
@@ -101,31 +112,37 @@ resource "docker_image" "redis" {
   keep_locally = true
 }
 
-# Imagen de la API — construida desde el Dockerfile local
-resource "docker_image" "franchise_api" {
-  name = "${var.project_name}:${var.api_version}"
-
-  build {
-    context    = var.build_context
-    dockerfile = "docker/Dockerfile"
-
-    build_args = {
-      SKIP_TESTS = "true"
-    }
-
-    no_cache = false
-  }
-
-  force_remove = true
-
+# Build de la imagen de la API via shell.
+# El provider kreuzwerker/docker tiene un bug conocido en Windows
+# que causa "unexpected EOF" al leer el Dockerfile en el build nativo.
+# Usamos null_resource + local-exec como workaround: Terraform invoca
+# directamente el CLI de Docker, que sí funciona correctamente en Windows.
+resource "null_resource" "build_api_image" {
+  # Re-construye la imagen si cambia el Dockerfile o el pom.xml.
+  # En CI/CD esto se reemplazaría por el SHA del commit.
   triggers = {
-    # Re-construye la imagen si cambia el Dockerfile o el código fuente.
-    # En CI/CD esto sería reemplazado por el tag del commit (SHA).
-    dir_sha1 = sha1(join("", [
-      filesha1("${var.build_context}/docker/Dockerfile"),
-      filesha1("${var.build_context}/pom.xml"),
-    ]))
+    dockerfile_sha = filesha1("${var.build_context}/docker/Dockerfile")
+    pom_sha        = filesha1("${var.build_context}/pom.xml")
   }
+
+  provisioner "local-exec" {
+    # Ejecuta 'docker build' desde la raíz del proyecto.
+    # working_dir asegura que el contexto de build sea correcto
+    # independientemente de desde dónde se ejecute Terraform.
+    command     = "docker build -f docker/Dockerfile -t ${var.project_name}:${var.api_version} ."
+    working_dir = var.build_context
+  }
+}
+
+# Referencia a la imagen construida por null_resource.
+# keep_locally = true evita que Terraform intente hacer pull desde
+# un registry remoto — la imagen existe solo localmente.
+resource "docker_image" "franchise_api" {
+  name         = "${var.project_name}:${var.api_version}"
+  keep_locally = true
+
+  # Garantiza que el build termine antes de referenciar la imagen.
+  depends_on = [null_resource.build_api_image]
 }
 
 # =============================================================
@@ -138,7 +155,7 @@ resource "docker_container" "mysql" {
 
   restart = "unless-stopped"
 
-  # Variables de entorno — en AWS vendrían de Secrets Manager
+  # Variables de entorno
   env = [
     "MYSQL_ROOT_PASSWORD=${var.db_password}",
     "MYSQL_DATABASE=${var.db_name}",
@@ -146,7 +163,7 @@ resource "docker_container" "mysql" {
     "MYSQL_COLLATION_SERVER=utf8mb4_unicode_ci",
   ]
 
-  # Comando de MySQL con configuraciones de rendimiento
+  # Parámetros de rendimiento y compatibilidad de MySQL
   command = [
     "--character-set-server=utf8mb4",
     "--collation-server=utf8mb4_unicode_ci",
@@ -155,19 +172,20 @@ resource "docker_container" "mysql" {
     "--max-connections=100",
   ]
 
-  # Montar el volumen persistente
+  # Volumen persistente: los datos sobreviven reinicios del contenedor
   volumes {
     volume_name    = docker_volume.mysql_data.name
     container_path = "/var/lib/mysql"
   }
 
-  # Puerto expuesto al host
+  # Puerto expuesto al host para herramientas locales (DBeaver, IntelliJ)
   ports {
     internal = 3306
     external = var.db_port_host
   }
 
-  # Healthcheck: espera a que MySQL esté listo para aceptar conexiones
+  # Healthcheck: verifica que MySQL acepte conexiones antes de
+  # que la API intente conectarse
   healthcheck {
     test         = ["CMD", "mysqladmin", "ping", "-h", "localhost",
                     "-u", "root", "-p${var.db_password}"]
@@ -177,7 +195,6 @@ resource "docker_container" "mysql" {
     start_period = "30s"
   }
 
-  # Conectar a la red interna
   networks_advanced {
     name = docker_network.franchise_network.name
   }
@@ -204,7 +221,7 @@ resource "docker_container" "mysql" {
 }
 
 # =============================================================
-#  CONTENEDOR Redis (simula Amazon ElastiCache for Redis 7)
+#  CONTENEDOR Redis
 # =============================================================
 
 resource "docker_container" "redis" {
@@ -213,10 +230,6 @@ resource "docker_container" "redis" {
 
   restart = "unless-stopped"
 
-  # Configuración de Redis:
-  #   --save 60 1         → persiste si hubo ≥1 cambio en 60s (RDB snapshot)
-  #   --maxmemory         → simula el límite de un nodo t3.micro de ElastiCache
-  #   --maxmemory-policy  → LRU: descarta keys menos usadas recientes
   command = [
     "redis-server",
     "--save", "60", "1",
@@ -229,10 +242,6 @@ resource "docker_container" "redis" {
     volume_name    = docker_volume.redis_data.name
     container_path = "/data"
   }
-
-  # Redis NO expone su puerto al host por seguridad.
-  # Solo los contenedores en la misma red pueden conectarse.
-  # En producción ElastiCache tampoco es accesible públicamente.
 
   healthcheck {
     test         = ["CMD", "redis-cli", "ping"]
@@ -277,8 +286,8 @@ resource "docker_container" "franchise_api" {
 
   restart = "unless-stopped"
 
-  # La API depende de que MySQL y Redis estén corriendo.
-  # Terraform garantiza el orden de creación de recursos.
+  # Terraform garantiza el orden: MySQL y Redis deben existir
+  # antes de crear el contenedor de la API.
   depends_on = [
     docker_container.mysql,
     docker_container.redis,
@@ -286,6 +295,8 @@ resource "docker_container" "franchise_api" {
 
   env = [
     "SPRING_PROFILES_ACTIVE=docker",
+    # 'mysql' y 'redis' se resuelven por DNS interno de Docker
+    # usando el nombre del contenedor en la misma red
     "DB_HOST=${var.project_name}-mysql",
     "DB_PORT=3306",
     "DB_NAME=${var.db_name}",
