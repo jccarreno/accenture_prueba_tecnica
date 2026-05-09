@@ -105,7 +105,7 @@ Elige **una** de las siguientes opciones según cómo quieras desplegar:
 
 ---
 
-## Despliegue con Docker Compose (recomendado)
+## Despliegue con Docker Compose
 
 Esta opción levanta tres contenedores automáticamente:
 
@@ -155,7 +155,7 @@ Respuesta esperada:
 
 ### 4. Usar la API
 
-La API ya tiene datos de ejemplo cargados por Flyway. Puedes probarla de inmediato:
+La API ya tiene datos de ejemplo cargados por Spring. Puedes probarla de inmediato:
 
 ```bash
 # Listar franquicias
@@ -239,8 +239,6 @@ mysql_connection_string = "jdbc:mysql://localhost:3306/franchise_db?..."
 terraform destroy
 ```
 
-> Para más detalles sobre Terraform consulta `iac/README-IaC.md`.
-
 ---
 
 ## Despliegue local sin Docker
@@ -255,7 +253,7 @@ CREATE DATABASE franchise_db
   COLLATE utf8mb4_unicode_ci;
 ```
 
-No es necesario crear tablas ni insertar datos — Flyway lo hace automáticamente al arrancar.
+No es necesario crear tablas ni insertar datos — Spring lo hace automáticamente al arrancar.
 
 ### 2. Verificar credenciales
 
